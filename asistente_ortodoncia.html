@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente Virtual de Ortodoncia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #073B4C;
+        }
+        .chat-container {
+            max-height: 70vh;
+            overflow-y: auto;
+            border: 1px solid #118AB2;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .message {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            word-wrap: break-word;
+        }
+        .user-message {
+            background-color: #FF6B6B;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .ai-message {
+            background-color: #ffffff;
+            color: #073B4C;
+            border: 1px solid #06D6A0;
+            align-self: flex-start;
+            border-bottom-left-radius: 0.25rem;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-xl mx-auto bg-white rounded-xl shadow-2xl p-6">
+        <header class="text-center mb-6 border-b pb-4 border-[#118AB2]">
+            <!-- Ícono Unicode como sustituto del logo para garantizar que se muestre -->
+            <div class="text-5xl mb-2">👩🏻‍⚕️⚙️</div>
+            <h1 class="text-3xl font-black text-[#073B4C] mb-2">Asistente de Ortodoncia</h1>
+            <p class="text-sm text-gray-500">Pregunta sobre los tipos de tratamiento, comodidad o tiempos. Mi información se basa en la infografía.</p>
+        </header>
+
+        <div id="chatLog" class="chat-container mb-6 bg-[#f7fafd]">
+            <!-- Mensaje de bienvenida de la IA -->
+            <div class="message ai-message">
+                ¡Hola! Soy tu asistente virtual. Pregúntame sobre los 3 tipos de ortodoncia: Convencional, Autoligado o Invisible. Por ejemplo: "¿Qué tratamiento es el más rápido?"
+            </div>
+        </div>
+
+        <div class="flex gap-3">
+            <input type="text" id="userInput" placeholder="Escribe tu pregunta aquí..." class="flex-grow p-3 border-2 border-[#118AB2] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6B6B]">
+            <button id="sendButton" class="bg-[#FF6B6B] text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-red-500 transition-all flex items-center justify-center disabled:opacity-50">
+                Enviar
+            </button>
+        </div>
+        <p id="loadingStatus" class="text-center text-[#118AB2] mt-3 hidden">Cargando respuesta...</p>
+    </div>
+
+    <script>
+        const chatLog = document.getElementById('chatLog');
+        const userInput = document.getElementById('userInput');
+        const sendButton = document.getElementById('sendButton');
+        const loadingStatus = document.getElementById('loadingStatus');
+
+        const systemPrompt = "Eres un experto en ortodoncia. Tu única fuente de información son los siguientes datos de la clínica. Debes responder de forma concisa y profesional, sin mencionar precios ni costos a menos que el usuario lo pregunte específicamente (usa el formato COP). Si la pregunta está fuera de estos datos, debes indicarlo. DATOS GENERALES: 1. Ortodoncia Convencional (Tiempo: 22 meses, Comodidad: 3/5, Discreción: 2/5. Es la opción más probada y efectiva). 2. Ortodoncia Autoligado (Tiempo: 18 meses, Comodidad: 4/5, Discreción: 3/5. Es más rápido, cómodo y con menos citas). 3. Ortodoncia Invisible (Tiempo: 15 meses, Comodidad: 5/5, Discreción: 5/5. Máxima discreción, removible, excelente higiene). DATOS DE COSTOS Y PROCESO: Para iniciar (Convencional o Autoligado) se requiere una Valoración que cuesta $20.000 COP, trayendo una radiografía panorámica reciente. Convencional (con gomas): Instalación $350.000 COP, Control Mensual $80.000 COP, Daño por unidad $25.000 COP. Autoligado (sin gomas): Instalación $900.000 COP, Control Mensual $100.000 COP, Daño por unidad $50.000 COP. Ortodoncia Invisible: Valoración Especializada $250.000 COP (incluye escaneo 3D y simulación). Costo Total Mínimo es de $5.000.000 COP (Varía según el caso). Forma de Pago (Invisible): 50% del total en la instalación, y el 50% restante se divide en cuotas mensuales.";
+
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function addMessageToChat(text, sender) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.classList.add(sender === 'user' ? 'user-message' : 'ai-message');
+            messageElement.textContent = text;
+            chatLog.appendChild(messageElement);
+            chatLog.scrollTop = chatLog.scrollHeight; 
+        }
+
+        async function sendMessage() {
+            const userQuery = userInput.value.trim();
+            if (!userQuery) return;
+
+            addMessageToChat(userQuery, 'user');
+            userInput.value = '';
+            sendButton.disabled = true;
+            loadingStatus.classList.remove('hidden');
+
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            let response = null;
+            let attempts = 0;
+            const maxAttempts = 5;
+            let delay = 1000;
+            let success = false;
+
+            while (attempts < maxAttempts) {
+                try {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.status === 429) {
+                        
+                    } else if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    } else {
+                        const result = await response.json();
+                        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                        
+                        if (text) {
+                            addMessageToChat(text, 'ai');
+                            success = true;
+                            break; 
+                        } else {
+                             throw new Error("No content returned.");
+                        }
+                    }
+
+                } catch (error) {
+                    
+                }
+
+                attempts++;
+                if (attempts < maxAttempts) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2; 
+                }
+            }
+
+            if (!success) {
+                 addMessageToChat('Lo siento, el servicio de asistencia no está disponible temporalmente. Por favor, inténtalo más tarde o contáctanos directamente.', 'ai');
+            }
+            
+            sendButton.disabled = false;
+            loadingStatus.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
